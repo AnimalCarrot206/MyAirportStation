@@ -1,0 +1,1511 @@
+<roblox version="4">
+  <Item class="ReplicatedFirst" referent="0">
+    <Properties>
+      <string name="Name">ReplicatedFirst</string>
+    </Properties>
+    <Item class="Folder" referent="1">
+      <Properties>
+        <string name="Name">Tests</string>
+      </Properties>
+      <Item class="Folder" referent="2">
+        <Properties>
+          <string name="Name">Client</string>
+        </Properties>
+        <Item class="LocalScript" referent="3">
+          <Properties>
+            <string name="Name">Npc.spec</string>
+            <string name="Source"><![CDATA[--!nonstrict
+if not game:IsLoaded() then
+	game.Loaded:Wait()
+end
+------------------------------------------------------
+local Npc = require(game.ReplicatedStorage.Client.Npc)
+------------------------------------------------------
+local createdNpc = Npc.new()
+------------------------------------------------------
+assert(createdNpc)
+------------------------------------------------------
+assert(createdNpc.Character)
+assert(createdNpc.Character:IsA("Model"))
+------------------------------------------------------
+createdNpc:Destroy()
+------------------------------------------------------
+print(createdNpc)
+]]></string>
+          </Properties>
+        </Item>
+      </Item>
+      <Item class="Folder" referent="4">
+        <Properties>
+          <string name="Name">Shared</string>
+        </Properties>
+        <Item class="LocalScript" referent="5">
+          <Properties>
+            <string name="Name">Items.spec</string>
+            <string name="Source"><![CDATA[--!strict
+if not game:IsLoaded() then
+	game.Loaded:Wait()
+end
+--------------------------------------
+local Items = require(game.ReplicatedStorage.Shared.Items)
+--------------------------------------
+local swordName = "ClassicSword"
+local actableSword = Items:GetItem("ClassicSword")
+--------------------------------------
+assert(actableSword)
+--------------------------------------
+assert(Items:GetActingFunction(actableSword))
+assert(Items:GetCost(swordName))
+assert(not Items:GetBuyableItemPrice(swordName))
+--------------------------------------
+assert(Items:IsActable(swordName))
+assert(not Items:IsBuyable(swordName))
+assert(not Items:IsPathfindable(swordName))
+--------------------------------------
+
+]]></string>
+          </Properties>
+        </Item>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="ReplicatedStorage" referent="6">
+    <Properties>
+      <string name="Name">ReplicatedStorage</string>
+    </Properties>
+    <Item class="Folder" referent="7">
+      <Properties>
+        <string name="Name">Client</string>
+      </Properties>
+      <Item class="ModuleScript" referent="8">
+        <Properties>
+          <string name="Name">Npc</string>
+          <string name="Source"><![CDATA[--!strict
+local PathfindingService = game:GetService("PathfindingService")
+
+local NPC = {}
+NPC.__index = NPC
+
+local npcFolder = game.ReplicatedStorage.NPC
+
+local function _getRandomNPC() : Model
+	local npcList = npcFolder:GetChildren()
+	local character = npcList[math.random(1, #npcList)]:Clone()
+	character.Parent = workspace
+	return character
+end
+
+local function _animate(character: any, animationName:string): AnimationTrack?
+	local animation = character:FindFirstChild(animationName):: Animation
+	local animator = character.Humanoid.Animator
+	if animator and animation then
+		return animator:LoadAnimation(animation)
+	end
+	return nil
+end
+
+function NPC.new(specialCharacter: Model?)
+	local newNPC = setmetatable({}, NPC)
+	
+	local character: Model = specialCharacter or _getRandomNPC()
+	newNPC.Character = character
+	
+	return newNPC
+end
+
+local function _walkToWaypoints(character: Model, tableWaypoints: {PathWaypoint})
+	local humanoid = character:FindFirstChildOfClass("Humanoid") :: Humanoid
+	
+	for _, waypoint in pairs(tableWaypoints) do
+		humanoid:MoveTo(waypoint.Position)
+		
+		if waypoint.Action == Enum.PathWaypointAction.Jump then
+			humanoid.Jump = true
+		end
+		humanoid.MoveToFinished:Wait()
+	end
+end
+
+local function _createPath(character: Model, destination: Vector3 | BasePart): Path
+	local path = PathfindingService:CreatePath()
+	
+	if typeof(destination) == "Instance" and destination:IsA("BasePart") then
+		destination = destination.Position
+	end
+	
+	pcall(function()
+		path:ComputeAsync(character:GetPrimaryPartCFrame().Position, destination)
+	end)
+	return path
+end
+
+local function _walk(character: Model, destination: Vector3 | BasePart)
+	
+	local path = _createPath(character, destination)
+	
+	if path.Status == Enum.PathStatus.Success then
+		local animationTrack = _animate(character, "Walking")
+		if animationTrack then
+			animationTrack.Looped = true
+			animationTrack:Play()
+		end
+		
+		_walkToWaypoints(character, path:GetWaypoints())
+		if animationTrack then
+			animationTrack:Stop()
+			animationTrack:Destroy()
+		end
+		return true
+	end
+	return false
+end
+
+function NPC:Move(destination: Vector3 | BasePart)
+	assert(typeof(destination) == "Vector3" or destination:IsA("BasePart"), "")
+	return _walk(self.Character, destination)
+end
+
+function NPC:Destroy()
+	if self.Character then
+		self.Character:Destroy()
+	end
+	table.clear(self)
+	self = nil
+end
+
+return NPC
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="9">
+        <Properties>
+          <string name="Name">NpcBehaviour</string>
+          <string name="Source"><![CDATA[--!nonstrict
+local NpcBehaviour = {}
+
+local StateMachine = require(script.StateMachine)
+local Items = require(game.ReplicatedStorage.Shared.Items)
+
+local ItemContainer = game.Workspace.ItemContainer:WaitForChild(game.Players.LocalPlayer.Name)
+
+local removeNpc = game.ReplicatedStorage.RemoteEvents.RemoveNPC
+local buy = game.ReplicatedStorage.RemoteEvents.NPC_Buy
+
+local activeNpcList = {}
+
+local function _findGoal(npc): Instance?
+	local itemsList = ItemContainer:GetChildren()
+	local randomNumber = math.random(1, #itemsList)
+	
+	return itemsList[randomNumber]
+end
+
+local function _buy(id: string, item: Model)
+	buy:FireServer(id, item.Name)
+end
+
+local function _act(npc, item)
+	
+end
+
+local function _reach(npc, goal: Model)
+	local goalCFrame = goal:GetPrimaryPartCFrame()
+	
+	return npc:Move(goalCFrame.Position)
+end
+
+local function _destroy(id)
+	local foundTable = activeNpcList[id]
+	if not foundTable then
+		return
+	end
+	for key, state in pairs(foundTable.States) do
+		state:Destroy()
+	end
+	table.clear(foundTable)
+	foundTable = nil
+end
+
+function _stopSimulating(npc, id)
+	removeNpc:FireServer(id)
+	npc:Destroy()
+	_destroy(id)
+end
+
+function NpcBehaviour:SimulateVisitor(npc, config)
+	
+	local idle = "idle"
+	local finding = "finding"
+	local reaching = "reaching"
+	local acting = "acting"
+	local buying = "buying"
+	
+	local stateTree = StateMachine:Create({idle, finding, reaching, acting, buying})
+	
+	
+	local repeats = math.random(1, 7) 
+	local currentRepeat = 0
+	
+	local currentGoal
+	
+	stateTree.States[idle].OnBeginState:Connect(function()
+		currentRepeat += 1
+		
+		if currentRepeat > repeats then
+			_stopSimulating(npc, config.Id)
+			return
+		end
+		
+		if not stateTree.previous or stateTree.previous == acting or stateTree.previous == buying then
+			StateMachine:SetState(stateTree, finding)
+			return
+		end
+		StateMachine:SetState(stateTree, finding)
+		--if stateTree.previous == finding then
+		--	self:StopSimulating(npc, config.Id)
+		--end
+		
+	end)
+	
+	
+	stateTree.States[finding].OnBeginState:Connect(function()
+		local container = {ItemContainer.Buyable,} --ItemContainer.Actable} :: {Instance}
+		local randomItemsType = container[math.random(1, #container)] :: Instance
+		
+		randomItemsType = randomItemsType:GetChildren()
+		
+		local randomItem = randomItemsType[math.random(1, #randomItemsType > 1 and #randomItemsType or 1)] :: Model
+		currentGoal = randomItem
+		
+		if not currentGoal then
+			StateMachine:SetState(stateTree, idle)
+			return
+		end
+		
+		StateMachine:SetState(stateTree, reaching)
+		
+	end)
+	
+	
+	stateTree.States[reaching].OnBeginState:Connect(function()
+		_reach(npc, currentGoal)
+		
+		if Items:IsActable(currentGoal.Name) then
+			StateMachine:SetState(stateTree, acting)
+			return
+		end
+
+		if Items:IsBuyable(currentGoal.Name) then
+			StateMachine:SetState(stateTree, buying)
+			return
+		end
+	end)
+	
+	
+	stateTree.States[acting].OnBeginState:Connect(function()
+		local actingFunction = Items:GetActingFunction(currentGoal)
+		actingFunction(npc)
+		
+		StateMachine:SetState(stateTree, idle)
+	end)
+	
+	stateTree.States[buying].OnBeginState:Connect(function()
+		_buy(config.Id, currentGoal)
+		StateMachine:SetState(stateTree, idle)
+	end)
+	
+	
+	activeNpcList[config.Id] = stateTree
+	StateMachine:SetState(stateTree, idle)
+end
+
+return NpcBehaviour
+]]></string>
+        </Properties>
+        <Item class="ModuleScript" referent="10">
+          <Properties>
+            <string name="Name">State</string>
+            <string name="Source"><![CDATA[--!strict
+local GoodSignal = require(game.ReplicatedStorage.Shared.GoodSignal)
+
+local State = {}
+State.__index = State
+
+function State.new(name: string)
+	local newState = setmetatable({}, State)
+	newState._name = name
+	
+	newState.OnBeginState = GoodSignal.new()
+	newState.OnEndState = GoodSignal.new()
+	
+	return newState
+end
+
+function State:Activate()
+	self.OnBeginState:Fire()
+end
+
+function State:Deactivate()
+	self.OnEndState:Fire()
+end
+
+function State:Destroy()
+	self.OnBeginState:Destroy()
+	self.OnEndState:Destroy()
+	table.clear(self)
+	self = nil
+end
+
+return State
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="11">
+          <Properties>
+            <string name="Name">StateMachine</string>
+            <string name="Source"><![CDATA[--!strict
+local State = require(script.Parent.State)
+
+local StateMachine = {}
+
+function StateMachine:Create(args: {[number]: string})
+	local stateTree = {}
+	stateTree.current = nil
+	stateTree.previous = nil
+	
+	stateTree.States = {}
+	
+	for index, stateName in ipairs(args) do
+		stateTree.States[stateName] = State.new(stateName)
+	end
+	return stateTree
+end
+
+function _findState(stateTree, stateName: string) : any
+	for key, state in pairs(stateTree.States) do
+		if state._name == stateName then
+			return state
+		end
+	end
+	return
+end
+
+
+function StateMachine:SetState(stateTree, stateName: string)
+	local foundState = _findState(stateTree, stateName)
+	assert(foundState, "State: "..stateName.." is not valid")
+	
+	stateTree.previous = stateTree.current
+	stateTree.current = foundState
+	
+	if stateTree.previous then
+		stateTree.previous:Deactivate()
+	end
+	stateTree.current:Activate()
+end
+
+return StateMachine
+]]></string>
+          </Properties>
+        </Item>
+      </Item>
+    </Item>
+    <Item class="Folder" referent="12">
+      <Properties>
+        <string name="Name">FurnitureModels</string>
+      </Properties>
+      <Item class="Model" referent="13">
+        <Properties>
+          <string name="Name">ClassicSword</string>
+        </Properties>
+        <Item class="ModuleScript" referent="14">
+          <Properties>
+            <string name="Name">ModuleScript</string>
+            <string name="Source"><![CDATA[return function(npc)
+	script.Parent.Handle.PointLight.Enabled = not script.Parent.Handle.PointLight.Enabled 
+end
+]]></string>
+          </Properties>
+        </Item>
+      </Item>
+    </Item>
+    <Item class="Folder" referent="15">
+      <Properties>
+        <string name="Name">Shared</string>
+      </Properties>
+      <Item class="ModuleScript" referent="16">
+        <Properties>
+          <string name="Name">GoodSignal</string>
+          <string name="Source">-- -----------------------------------------------------------------------------
+--               Batched Yield-Safe Signal Implementation                     --
+-- This is a Signal class which has effectively identical behavior to a       --
+-- normal RBXScriptSignal, with the only difference being a couple extra      --
+-- stack frames at the bottom of the stack trace when an error is thrown.     --
+-- This implementation caches runner coroutines, so the ability to yield in   --
+-- the signal handlers comes at minimal extra cost over a naive signal        --
+-- implementation that either always or never spawns a thread.                --
+--                                                                            --
+-- API:                                                                       --
+--   local Signal = require(THIS MODULE)                                      --
+--   local sig = Signal.new()                                                 --
+--   local connection = sig:Connect(function(arg1, arg2, ...) ... end)        --
+--   sig:Fire(arg1, arg2, ...)                                                --
+--   connection:Disconnect()                                                  --
+--   sig:DisconnectAll()                                                      --
+--   local arg1, arg2, ... = sig:Wait()                                       --
+--                                                                            --
+-- License:                                                                   --
+--   Licensed under the MIT license.                                          --
+--                                                                            --
+-- Authors:                                                                   --
+--   stravant - July 31st, 2021 - Created the file.                           --
+--   sleitnick - August 3rd, 2021 - Modified for Knit.                        --
+-- -----------------------------------------------------------------------------
+
+-- The currently idle thread to run the next handler on
+local freeRunnerThread = nil
+
+-- Function which acquires the currently idle handler runner thread, runs the
+-- function fn on it, and then releases the thread, returning it to being the
+-- currently idle one.
+-- If there was a currently idle runner thread already, that's okay, that old
+-- one will just get thrown and eventually GCed.
+local function acquireRunnerThreadAndCallEventHandler(fn, ...)
+	local acquiredRunnerThread = freeRunnerThread
+	freeRunnerThread = nil
+	fn(...)
+	-- The handler finished running, this runner thread is free again.
+	freeRunnerThread = acquiredRunnerThread
+end
+
+-- Coroutine runner that we create coroutines of. The coroutine can be 
+-- repeatedly resumed with functions to run followed by the argument to run
+-- them with.
+local function runEventHandlerInFreeThread(...)
+	acquireRunnerThreadAndCallEventHandler(...)
+	while true do
+		acquireRunnerThreadAndCallEventHandler(coroutine.yield())
+	end
+end
+
+
+--[=[
+	@within Signal
+	@interface SignalConnection
+	.Connected boolean
+	.Disconnect (SignalConnection) -> ()
+
+	Represents a connection to a signal.
+	```lua
+	local connection = signal:Connect(function() end)
+	print(connection.Connected) --> true
+	connection:Disconnect()
+	print(connection.Connected) --> false
+	```
+]=]
+
+-- Connection class
+local Connection = {}
+Connection.__index = Connection
+
+
+function Connection.new(signal, fn)
+	return setmetatable({
+		Connected = true,
+		_signal = signal,
+		_fn = fn,
+		_next = false,
+	}, Connection)
+end
+
+
+function Connection:Disconnect()
+	if not self.Connected then return end
+	self.Connected = false
+
+	-- Unhook the node, but DON'T clear it. That way any fire calls that are
+	-- currently sitting on this node will be able to iterate forwards off of
+	-- it, but any subsequent fire calls will not hit it, and it will be GCed
+	-- when no more fire calls are sitting on it.
+	if self._signal._handlerListHead == self then
+		self._signal._handlerListHead = self._next
+	else
+		local prev = self._signal._handlerListHead
+		while prev and prev._next ~= self do
+			prev = prev._next
+		end
+		if prev then
+			prev._next = self._next
+		end
+	end
+end
+
+Connection.Destroy = Connection.Disconnect
+
+-- Make Connection strict
+setmetatable(Connection, {
+	__index = function(_tb, key)
+		error(("Attempt to get Connection::%s (not a valid member)"):format(tostring(key)), 2)
+	end,
+	__newindex = function(_tb, key, _value)
+		error(("Attempt to set Connection::%s (not a valid member)"):format(tostring(key)), 2)
+	end
+})
+
+
+--[=[
+	@within Signal
+	@type ConnectionFn (...any) -> ()
+
+	A function connected to a signal.
+]=]
+
+--[=[
+	@class Signal
+
+	Signals allow events to be dispatched and handled.
+
+	For example:
+	```lua
+	local signal = Signal.new()
+
+	signal:Connect(function(msg)
+		print("Got message:", msg)
+	end)
+
+	signal:Fire("Hello world!")
+	```
+]=]
+local Signal = {}
+Signal.__index = Signal
+
+--[=[
+	Constructs a new Signal
+
+	@return Signal
+]=]
+function Signal.new()
+	local self = setmetatable({
+		_handlerListHead = false,
+		_proxyHandler = nil,
+	}, Signal)
+	return self
+end
+
+
+--[=[
+	Constructs a new Signal that wraps around an RBXScriptSignal.
+
+	@param rbxScriptSignal RBXScriptSignal -- Existing RBXScriptSignal to wrap
+	@return Signal
+
+	For example:
+	```lua
+	local signal = Signal.Wrap(workspace.ChildAdded)
+	signal:Connect(function(part) print(part.Name .. " added") end)
+	Instance.new("Part").Parent = workspace
+	```
+]=]
+function Signal.Wrap(rbxScriptSignal)
+	assert(typeof(rbxScriptSignal) == "RBXScriptSignal", "Argument #1 to Signal.Wrap must be a RBXScriptSignal; got " .. typeof(rbxScriptSignal))
+	local signal = Signal.new()
+	signal._proxyHandler = rbxScriptSignal:Connect(function(...)
+		signal:Fire(...)
+	end)
+	return signal
+end
+
+
+--[=[
+	Checks if the given object is a Signal.
+
+	@param obj any -- Object to check
+	@return boolean -- `true` if the object is a Signal.
+]=]
+function Signal.Is(obj)
+	return type(obj) == "table" and getmetatable(obj) == Signal
+end
+
+
+--[=[
+	@param fn ConnectionFn
+	@return SignalConnection
+
+	Connects a function to the signal, which will be called anytime the signal is fired.
+	```lua
+	signal:Connect(function(msg, num)
+		print(msg, num)
+	end)
+
+	signal:Fire("Hello", 25)
+	```
+]=]
+function Signal:Connect(fn)
+	local connection = Connection.new(self, fn)
+	if self._handlerListHead then
+		connection._next = self._handlerListHead
+		self._handlerListHead = connection
+	else
+		self._handlerListHead = connection
+	end
+	return connection
+end
+
+
+--[=[
+	@param fn ConnectionFn
+	@return SignalConnection
+
+	Connects a function to the signal, which will be called the next time the signal fires. Once
+	the connection is triggered, it will disconnect itself.
+	```lua
+	signal:ConnectOnce(function(msg, num)
+		print(msg, num)
+	end)
+
+	signal:Fire("Hello", 25)
+	signal:Fire("This message will not go through", 10)
+	```
+]=]
+function Signal:ConnectOnce(fn)
+	local connection
+	local done = false
+	connection = self:Connect(function(...)
+		if done then return end
+		done = true
+		connection:Disconnect()
+		fn(...)
+	end)
+	return connection
+end
+
+
+function Signal:GetConnections()
+	local items = {}
+	local item = self._handlerListHead
+	while item do
+		table.insert(items, item)
+		item = item._next
+	end
+	return items
+end
+
+
+-- Disconnect all handlers. Since we use a linked list it suffices to clear the
+-- reference to the head handler.
+--[=[
+	Disconnects all connections from the signal.
+	```lua
+	signal:DisconnectAll()
+	```
+]=]
+function Signal:DisconnectAll()
+	local item = self._handlerListHead
+	while item do
+		item.Connected = false
+		item = item._next
+	end
+	self._handlerListHead = false
+end
+
+
+-- Signal:Fire(...) implemented by running the handler functions on the
+-- coRunnerThread, and any time the resulting thread yielded without returning
+-- to us, that means that it yielded to the Roblox scheduler and has been taken
+-- over by Roblox scheduling, meaning we have to make a new coroutine runner.
+--[=[
+	@param ... any
+
+	Fire the signal, which will call all of the connected functions with the given arguments.
+	```lua
+	signal:Fire("Hello")
+
+	-- Any number of arguments can be fired:
+	signal:Fire("Hello", 32, {Test = "Test"}, true)
+	```
+]=]
+function Signal:Fire(...)
+	local item = self._handlerListHead
+	while item do
+		if item.Connected then
+			if not freeRunnerThread then
+				freeRunnerThread = coroutine.create(runEventHandlerInFreeThread)
+			end
+			task.spawn(freeRunnerThread, item._fn, ...)
+		end
+		item = item._next
+	end
+end
+
+
+--[=[
+	@param ... any
+
+	Same as `Fire`, but uses `task.defer` internally &amp; doesn't take advantage of thread reuse.
+	```lua
+	signal:FireDeferred("Hello")
+	```
+]=]
+function Signal:FireDeferred(...)
+	local item = self._handlerListHead
+	while item do
+		task.defer(item._fn, ...)
+		item = item._next
+	end
+end
+
+
+--[=[
+	@return ... any
+	@yields
+
+	Yields the current thread until the signal is fired, and returns the arguments fired from the signal.
+	Yielding the current thread is not always desirable. If the desire is to only capture the next event
+	fired, using `ConnectOnce` might be a better solution.
+	```lua
+	task.spawn(function()
+		local msg, num = signal:Wait()
+		print(msg, num) --> "Hello", 32
+	end)
+	signal:Fire("Hello", 32)
+	```
+]=]
+function Signal:Wait()
+	local waitingCoroutine = coroutine.running()
+	local connection
+	local done = false
+	connection = self:Connect(function(...)
+		if done then return end
+		done = true
+		connection:Disconnect()
+		task.spawn(waitingCoroutine, ...)
+	end)
+	return coroutine.yield()
+end
+
+
+--[=[
+	Cleans up the signal.
+
+	Technically, this is only necessary if the signal is created using
+	`Signal.Wrap`. Connections should be properly GC'd once the signal
+	is no longer referenced anywhere. However, it is still good practice
+	to include ways to strictly clean up resources. Calling `Destroy`
+	on a signal will also disconnect all connections immediately.
+	```lua
+	signal:Destroy()
+	```
+]=]
+function Signal:Destroy()
+	self:DisconnectAll()
+	local proxyHandler = rawget(self, "_proxyHandler")
+	if proxyHandler then
+		proxyHandler:Disconnect()
+	end
+end
+
+
+-- Make signal strict
+setmetatable(Signal, {
+	__index = function(_tb, key)
+		error(("Attempt to get Signal::%s (not a valid member)"):format(tostring(key)), 2)
+	end,
+	__newindex = function(_tb, key, _value)
+		error(("Attempt to set Signal::%s (not a valid member)"):format(tostring(key)), 2)
+	end
+})
+
+return Signal</string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="17">
+        <Properties>
+          <string name="Name">Items</string>
+          <string name="Source"><![CDATA[--!strict
+local Items = {}
+
+local CollectionService = game:GetService("CollectionService")
+local RunService = game:GetService("RunService")
+
+local itemPlace = game.ReplicatedStorage.RemoteEvents.ItemPlace
+local itemContainer = game.ReplicatedStorage.FurnitureModels
+
+local function _findItem(itemName: string)
+	return itemContainer:FindFirstChild(itemName) or error(string.format("Item with name %s, doesn't exists!", itemName))
+end
+
+function Items:GetItem(itemName: string)
+	local foundItem = _findItem(itemName)
+	
+	if not CollectionService:HasTag(foundItem, "Item") then
+		error(string.format("Item %s doesn't have tag 'Item'", itemName))
+	end
+	
+	if not foundItem:GetAttribute("Cost") then
+		error(string.format("Item %s doesn't have attribute 'Cost'", itemName))
+	end
+	
+	if CollectionService:HasTag(foundItem, "Actable") then
+		local moduleScript = foundItem:FindFirstChildOfClass("ModuleScript")
+		
+		if moduleScript == nil then
+			error(string.format("Actable item '%s' must have a ModuleScript", itemName))
+		end
+		
+		if type(require(moduleScript)) ~= "function" then
+			error(string.format("Actable item '%s' must have a ModuleScript that returning a function", itemName))
+		end
+		
+	end
+	
+	if CollectionService:HasTag(foundItem, "Buyable") and foundItem:GetAttribute("Price") == nil then
+		error(string.format("Buyable item %s doesn't have attribute 'Price'!", itemName))
+	end
+	
+	return foundItem :: Model
+end
+
+function Items:IsActable(itemName: string): boolean
+	local foundItem = self:GetItem(itemName)
+	return CollectionService:HasTag(foundItem, "Actable")
+end
+
+function Items:IsPathfindable(itemName: string): boolean
+	local foundItem = self:GetItem(itemName)
+	return CollectionService:HasTag(foundItem, "Pathfindable")
+end
+
+function Items:IsBuyable(itemName: string): boolean
+	local foundItem = self:GetItem(itemName)
+	return CollectionService:HasTag(foundItem, "Buyable")
+end
+
+function Items:GetCost(itemName: string)
+	local foundItem = self:GetItem(itemName)
+	return foundItem:GetAttribute("Cost") :: number
+end
+
+function Items:GetBuyableItemPrice(itemName: string)
+	local foundItem = self:GetItem(itemName)
+	return foundItem:GetAttribute("Price") :: number
+end
+
+function Items:GetActingFunction(itemModel: Model): (npc: any) -> ()
+	assert(itemModel, "")
+	local moduleScript = itemModel:FindFirstChildOfClass("ModuleScript")
+	return require(moduleScript)
+end
+
+function Items:Move(itemModel: Model, cframeToMove: CFrame)
+	itemModel:SetPrimaryPartCFrame(cframeToMove)
+end
+
+function Items:Place(itemName: string, cframeToPlace: CFrame, player: Player?)
+	if RunService:IsClient() then
+		itemPlace:FireServer(itemName, cframeToPlace)
+		return
+	end
+	
+	if RunService:IsServer() then
+		assert(player, "Player must be provided for server Place function")
+		
+		local playerItemContainer = workspace.ItemContainer:FindFirstChild(player.Name)
+		assert(playerItemContainer, string.format("%s doesn't have ItemContainer folder", player.Name))
+		
+		local itemModel = self:GetItem(itemName):Clone() :: Model
+		itemModel:SetPrimaryPartCFrame(cframeToPlace)
+		
+		if self:IsActable(itemName) then
+			itemModel.Parent = playerItemContainer.Actable
+			return
+		end
+
+		if self:IsBuyable(itemName) then
+			itemModel.Parent = playerItemContainer.Buyable
+			return
+		end
+
+		if self:IsPathfindable(itemName) then
+			itemModel.Parent = playerItemContainer.Pathfindable
+			return
+		end
+
+		itemModel.Parent = playerItemContainer.Item
+		return
+	end
+end
+
+return Items
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="ServerScriptService" referent="18">
+    <Properties>
+      <string name="Name">ServerScriptService</string>
+    </Properties>
+    <Item class="Script" referent="19">
+      <Properties>
+        <string name="Name">MainScript</string>
+        <string name="Source"><![CDATA[--!nonstrict
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerScriptService = game:GetService("ServerScriptService")
+
+local SharedClasses = ReplicatedStorage.Shared
+local ServerClasses = ServerScriptService.Server
+
+local RemoteEvents = ReplicatedStorage.RemoteEvents
+
+-- Money Server -> Client
+do
+	local CashAccounting  = require(ServerClasses.CashAccounting)
+	
+	local START_CAPITAL = 100
+	
+	Players.PlayerAdded:Connect(function(player: Player)
+		-- Загружаем баланс или создаем его,
+		-- если он отсутствует в ДатаСторе
+		local balance = CashAccounting:LoadCurrency(player) or CashAccounting:StartAccounting(player, START_CAPITAL)
+		
+		
+		do
+			local test = coroutine.wrap(function()
+				while wait(1) do
+					print("Changing...")
+					balance:AddMoney(math.random(-1000, 1000))
+				end
+			end)
+		end
+	end)
+	
+	Players.PlayerRemoving:Connect(function(player: Player)
+		CashAccounting:SaveCurrency(player)
+	end)
+end
+-- ItemFolders
+do
+	local exampleFolders = game.ReplicatedStorage.ItemFoldersContainer
+	
+	Players.PlayerAdded:Connect(function(player: Player)
+		local folder = exampleFolders:Clone()
+		folder.Name = player.Name
+		folder.Parent = workspace.ItemContainer
+	end)
+	
+	Players.PlayerRemoving:Connect(function(player: Player)
+		local folder = workspace.ItemContainer:FindFirstChild(player.Name)
+		if folder then
+			folder:Destroy()
+		end
+	end)
+end
+
+do
+	local CashAccounting  = require(ServerClasses.CashAccounting)
+	local Items = require(SharedClasses.Items)
+	
+	local placeItem = RemoteEvents.ItemPlace
+	
+	-- Функция покупающая предмет
+	-- !При этом сразу проверяющая хватает ли денег игроку!
+	-- Возвращает буленово значение как результат
+	-- Если у игрока по какой либо причине нет баланса
+	-- (что по идее не может произойти), то выдает ошибку
+	local function buyItem(player:Player, itemCost): boolean
+		local balance = CashAccounting:GetPlayerBalance(player)
+		assert(balance ~= nil, "No balance for the player: " .. player.Name.. "?")
+		-- Если кол-во денег больше или равно стоимости
+		-- Тогда покупаем
+		if balance:IsCanAfford(itemCost) then
+			balance:AddMoney(-itemCost)
+			return true
+		end
+		return false
+	end
+	-- Срабатывает когда игрок нажимает левую кнопку с экипированный предметом
+	placeItem.OnServerEvent:Connect(function(player: Player, name: string, cframeToPlace: CFrame)
+		local success, errorMessage = pcall(function()
+			return Items:GetItem(name)
+		end)
+		-- Если внутри pcall будет ошибка, то model станет 
+		-- сообщением об ошибке, его мы и посылаем на клиент
+		if not success then
+			placeItem:FireClient(player, errorMessage)
+			return
+		end
+		
+		-- !ВАЖНО!
+		-- У ЛЮБОЙ МОДЕЛИ-ПРЕДМЕТА ДОЛЖЕН БЫТЬ АТТРИБУТ "Cost"
+		local cost = Items:GetCost(name)
+		-- Пытаемся купить предмет, если не удалось
+		-- отправляем сообщение на сервер
+		local success = buyItem(player, cost)
+		if not success then
+			placeItem:FireClient(player, "Don't enough money!")
+			return
+		end
+		
+		Items:Place(name, cframeToPlace, player)
+	end)
+end
+]]></string>
+      </Properties>
+    </Item>
+    <Item class="Folder" referent="20">
+      <Properties>
+        <string name="Name">Server</string>
+      </Properties>
+      <Item class="ModuleScript" referent="21">
+        <Properties>
+          <string name="Name">Balance</string>
+          <string name="Source">--!strict
+local GoodSignal = require(game.ReplicatedStorage.Shared.GoodSignal)
+-- Класс баланса для хранения значения |денег?|
+local Balance = {}
+-- Типичное для луа игра с метатаблицами, просто, но со вкусом
+Balance.__index = Balance
+
+-- Обычный конструктор с необязательным 
+-- аргументом startCapital, 
+-- сразу изменяющий значение _capital,
+-- где _capital - "приватное поле",
+-- это и есть значение баланса
+function Balance.new(startCapital: number?)
+	local balance = setmetatable({}, Balance)
+
+	balance._capital = startCapital or 0
+	balance.Changed = GoodSignal.new()
+	
+	return balance
+end
+-- Обычный метод уничтожения/осовобождения памяти
+function Balance:Destroy()
+	
+	self.Changed:Destroy()
+	self.Changed = nil
+	-- Просто удаляем все из таблички,
+	-- не думаю что это необходимо,
+	-- но подстраховаться стоит
+	table.clear(self)
+	self = nil
+end
+-- Это геттер для _capital поля
+function Balance:GetCapital()
+	return self._capital
+end
+-- Отдельный метод для проверки способности покупки
+function Balance:IsCanAfford(value: number): boolean
+	return self._capital >= value
+end
+-- Это сеттер для _capital поля
+-- Причем необычный сеттер, функция принимает также
+-- отрицательные числа, как бы убавляя баланс,
+-- + Простая, шустрая реализация
+-- - Немножко странно, не интуитивно понятно
+function Balance:AddMoney(numberToAdd: number)
+	self._capital += numberToAdd
+	self.Changed:Fire(self._capital)
+end
+
+return Balance</string>
+        </Properties>
+        <Item class="Script" referent="22">
+          <Properties>
+            <string name="Name">Balance.spec</string>
+            <string name="Source">--!strict
+local Balance = require(script.Parent)
+
+local createdBalance = Balance.new()
+assert(createdBalance:GetCapital() == 0)
+----------------------------------------
+createdBalance:AddMoney(100)
+----------------------------------------
+assert(createdBalance:GetCapital() == 100)
+assert(createdBalance:IsCanAfford(50))
+assert(createdBalance:IsCanAfford(100))
+----------------------------------------
+assert(not createdBalance:IsCanAfford(1000))
+----------------------------------------
+createdBalance:Destroy()
+print(createdBalance)
+----------------------------------------
+createdBalance = nil</string>
+          </Properties>
+        </Item>
+      </Item>
+      <Item class="ModuleScript" referent="23">
+        <Properties>
+          <string name="Name">CashAccounting</string>
+          <string name="Source">--!nonstrict
+local DataStoreService = game:GetService("DataStoreService")
+local MoneyDataStore = DataStoreService:GetDataStore("PlayerStats", "MoneyValue")
+
+local Balance = require(script.Parent.Balance)
+
+local npcBuyed = game.ServerStorage.BindableEvents.NpcBuyedItem
+
+-- Можно сказать обертка баланса, но более прокаченная
+-- Напоминает паттерн фабрика
+local CashAccouting = {}
+
+local playersBalances = {}
+-- Создаем баланс, возвращаем его и запихиваем в список 
+-- балансов игроков, для дальнейшего использования
+function CashAccouting:StartAccounting(player: Player, valueToAdd: number | nil)
+	local createdBalance = Balance.new(valueToAdd)
+	playersBalances[player.Name] = createdBalance
+	-- Аттрибут используется для связи с клиентом, экономим интернет 0_0
+	-- т.к вызовы удаленного эвента более дорогая операция
+	createdBalance.Changed:Connect(function(value)
+		player:SetAttribute("Money", value)
+	end)
+	-- !Проблема синхронизации!
+	-- Нужно вызывать эвент в первый раз САМОСТОЯТЕЛЬНО
+	createdBalance.Changed:Fire(createdBalance:GetCapital())
+	return createdBalance
+end
+-- Удаляем баланс из списка и уничтожаем его
+function CashAccouting:StopAccouting(player: Player)
+	local foundBalance = playersBalances[player.Name]
+	if foundBalance then
+		foundBalance:Destroy()
+	end
+	playersBalances[player.Name] = nil
+end
+-- Получаем баланс по имени игрока и возвращаем его
+-- Если его нет в списке будет возвращен nil
+function CashAccouting:GetPlayerBalance(player: Player): any
+	return playersBalances[player.Name]
+end
+-- Метод для DataStore
+function CashAccouting:LoadCurrency(player: Player)
+	local success, currentMoneyValue = pcall(function()
+		return MoneyDataStore:GetAsync(player.UserId)
+	end)
+	
+	if success and currentMoneyValue ~= nil then
+		return CashAccouting:StartAccounting(player, currentMoneyValue)
+	end
+end
+-- Метод для DataStore
+function CashAccouting:SaveCurrency(player: Player)
+	local balance = CashAccouting:GetPlayerBalance(player)
+	assert(balance, string.format("Player: %s doesn't have balance!", player.Name))
+	
+	local moneyCount = balance:GetCapital()
+	local success, errorMessage = pcall(function()
+		MoneyDataStore:SetAsync(player.UserId, moneyCount)
+	end)
+	
+	CashAccouting:StopAccouting(player)
+	--if success then
+	--	print("Success saved!")
+	--else
+	--	warn("Whoops! Didn't saved!")
+	--end
+end
+
+npcBuyed.Event:Connect(function(player: Player, price: number)
+	assert(player)
+	assert(price)
+	
+	local balance = CashAccouting:GetPlayerBalance(player)
+	if not balance then
+		return
+	end
+	
+	balance:AddMoney(price)
+end)
+
+return CashAccouting</string>
+        </Properties>
+        <Item class="Script" referent="24">
+          <Properties>
+            <string name="Name">CashAccounting.spec</string>
+            <string name="Source">--!nonstrict
+local Players = game:GetService("Players")
+---------------------------------------------
+local CashAccounting = require(script.Parent)
+
+local function commonTests(player: Player, balance: any?)
+	local createdBalance = balance or CashAccounting:StartAccounting(player)
+	----------------------------------------
+	createdBalance:AddMoney(-createdBalance:GetCapital())
+	assert(createdBalance:GetCapital() == 0)
+	----------------------------------------
+	createdBalance:AddMoney(100)
+	----------------------------------------
+	assert(createdBalance:GetCapital() == 100)
+	assert(createdBalance:IsCanAfford(50))
+	assert(createdBalance:IsCanAfford(100))
+	----------------------------------------
+	assert(not createdBalance:IsCanAfford(1000))
+	----------------------------------------
+	assert(CashAccounting:GetPlayerBalance(player) == createdBalance)
+	CashAccounting:StopAccouting(player)
+	----------------------------------------
+	print(createdBalance)
+	print(CashAccounting:GetPlayerBalance(player))
+	----------------------------------------
+	createdBalance = nil
+end
+
+---------------------------------------------
+Players.PlayerAdded:Connect(function(player)
+	----------------------------------------
+	commonTests(player)
+	----------------------------------------
+	local loadedBalance = CashAccounting:LoadCurrency(player)
+	----------------------------------------
+	commonTests(player, loadedBalance)
+	----------------------------------------
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+	CashAccounting:SaveCurrency(player)
+end)</string>
+          </Properties>
+        </Item>
+      </Item>
+      <Item class="ModuleScript" referent="25">
+        <Properties>
+          <string name="Name">NpcFactory</string>
+          <string name="Source"><![CDATA[--!strict
+local NPCFactory = {}
+
+local HttpService = game:GetService("HttpService")
+
+local CashAccounting = require(game.ServerScriptService.Server.CashAccounting)
+
+local balance = require(game.ServerScriptService.Server.Balance)
+local items = require(game.ReplicatedStorage.Shared.Items)
+
+local createNpc = game.ReplicatedStorage.RemoteEvents.CreateNPC
+local removeNpc = game.ReplicatedStorage.RemoteEvents.RemoveNPC
+
+local buying = game.ReplicatedStorage.RemoteEvents.NPC_Buy
+local npcBuyed = game.ServerStorage.BindableEvents.NpcBuyedItem
+local npcList = {}
+
+local function _findNpc(player: Player, id: string)
+	local foundTable = npcList[player.Name]
+	for index, serverNpc in ipairs(foundTable) do
+		if serverNpc.id == id then
+			return serverNpc, index
+
+		end
+	end
+end
+
+game.Players.PlayerAdded:Connect(function(player: Player)
+	npcList[player.Name] = {}
+end)
+
+game.Players.PlayerRemoving:Connect(function(player: Player)
+	local foundTable = npcList[player.Name]
+	
+	for index, severNpc in pairs(foundTable) do
+		severNpc.balance:Destroy()
+		table.clear(severNpc)
+		table.remove(foundTable, index)
+	end
+end)
+
+buying.OnServerEvent:Connect(function(player, id: string, itemName: string)
+	assert(itemName, "Name of the item wasn't provided")
+	assert(id, "Id wasn't provided")
+	local foundNpc = _findNpc(player, id)
+	local foundItem = items:GetItem(itemName)
+	
+	if not foundItem then
+		error(string.format("There is no item with that name '%s' ", itemName))
+	end
+	
+	if not foundNpc then
+		error(string.format("NPC with this id '%s' was not found", id))
+	end
+	
+	local itemPrice = items:GetBuyableItemPrice(itemName)
+	local npcBalance = foundNpc.balance
+	
+	if npcBalance:GetCapital() < itemPrice then
+		return
+	end
+	
+	npcBalance:AddMoney(-itemPrice)
+	npcBuyed:Fire(player, itemPrice)
+end)
+
+removeNpc.OnServerEvent:Connect(function(player:Player, id: string?)
+	assert(id, "Npc id must be provided!")
+
+	local foundNpc, index = _findNpc(player, id)
+	table.remove(npcList[player.Name], index)
+	
+	foundNpc.balance:Destroy()
+	table.clear(foundNpc)
+	foundNpc = nil
+end)
+
+function NPCFactory:Create(player: Player, type: string)
+	local id = HttpService:GenerateGUID(false)
+	-- Логика изменения баланса NPC в начале
+	local startCapital = math.random(0, 1000)
+	local npcBalance = balance.new(startCapital)
+	
+	local config = {
+		["Capital"] = startCapital,
+		["Id"] = id,
+		["Type"] = type
+	}
+	local serverNpc = {id = id, type = type, balance = npcBalance}
+	if not npcList[player.Name] then
+		npcList[player.Name] = {}
+	end
+	table.insert(npcList[player.Name], serverNpc)
+	
+	createNpc:FireClient(player, config)
+
+	return serverNpc
+end
+
+return NPCFactory
+]]></string>
+        </Properties>
+        <Item class="Script" referent="26">
+          <Properties>
+            <string name="Name">NpcFactory.spec</string>
+            <string name="Source"><![CDATA[--!strict
+local NpcFactory = require(script.Parent)
+-------------------------------------------
+]]></string>
+          </Properties>
+        </Item>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="StarterPlayer" referent="27">
+    <Properties>
+      <string name="Name">StarterPlayer</string>
+    </Properties>
+    <Item class="StarterPlayerScripts" referent="28">
+      <Properties>
+        <string name="Name">StarterPlayerScripts</string>
+      </Properties>
+      <Item class="LocalScript" referent="29">
+        <Properties>
+          <string name="Name">MainScript</string>
+          <string name="Source">--!strict
+if not game:IsLoaded() then
+	game.Loaded:Wait()
+end
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local ContextActionService = game:GetService("ContextActionService")
+local Players = game:GetService("Players")
+
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer.PlayerGui
+
+local BindableEvents = ReplicatedStorage.BindableEvents
+local RemoteEvents = ReplicatedStorage.RemoteEvents
+local SharedClasses = ReplicatedStorage.Shared
+local ClientClasses = ReplicatedStorage.Client
+
+-- Оповещение сервера о том что клиент загрузился
+-- Необходимо для синхронизации
+
+-- Отображение кол-ва денег на UI
+-- При помощи RemoteEvent CashChanged
+do 
+	local moneyScreenGui = PlayerGui:WaitForChild("Money")
+	local textBox = moneyScreenGui:WaitForChild("TextBox")
+	
+	LocalPlayer.AttributeChanged:Connect(function(attributeName)
+		if not attributeName == "Money" then
+			return  
+		end
+		local moneyValue = LocalPlayer:GetAttribute(attributeName)
+		
+		textBox.Text = tostring(moneyValue)
+	end)
+	
+	textBox.Text = LocalPlayer:GetAttribute("Money") or "Loading..."
+	
+end
+
+-- Небольшой тест работоспособности Предметов 
+do
+	local Items = require(SharedClasses.Items)
+	
+	local itemModel = Items:GetItem("ClassicSword"):Clone()
+	itemModel.Parent = workspace
+	
+	local mouse = game.Players.LocalPlayer:GetMouse()
+	mouse.TargetFilter = itemModel
+	
+	RunService.RenderStepped:Connect(function()
+		local cframeWithoutRotation = CFrame.new(mouse.Hit.Position)
+		Items:Move(itemModel, cframeWithoutRotation)
+	end)
+	
+	local function onMouseButton1Down(actionName, inputState, inputObject)
+		if inputState ~= Enum.UserInputState.Begin then
+			return
+		end
+		local cframeWithoutRotation = CFrame.new(mouse.Hit.Position)
+		Items:Place(itemModel.Name, cframeWithoutRotation)
+	end
+	ContextActionService:BindAction("Build", onMouseButton1Down, false, Enum.UserInputType.MouseButton1)
+end
+
+-- Небольшой набросок NPC для клиент-сервера
+do
+	local npc = require(ClientClasses.Npc)
+	local npcBehaviour = require(ClientClasses.NpcBehaviour)
+	
+	local createNpc = RemoteEvents.CreateNPC
+	local removeNpc = RemoteEvents.RemoveNPC
+	
+	createNpc.OnClientEvent:Connect(function(config)
+		local createdNpc = npc.new()
+		
+		if config.Type == "Visitor" then
+			npcBehaviour:SimulateVisitor(createdNpc, config)
+		end
+	end)
+	
+	
+end</string>
+        </Properties>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="Workspace" referent="30">
+    <Properties>
+      <string name="Name">Workspace</string>
+    </Properties>
+    <Item class="Model" referent="31">
+      <Properties>
+        <string name="Name">ClassicSword</string>
+      </Properties>
+      <Item class="ModuleScript" referent="32">
+        <Properties>
+          <string name="Name">ModuleScript</string>
+          <string name="Source"><![CDATA[function g(npc)
+	script.Parent.Handle.PointLight.Enabled = true
+end
+
+return g
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+  </Item>
+</roblox>
