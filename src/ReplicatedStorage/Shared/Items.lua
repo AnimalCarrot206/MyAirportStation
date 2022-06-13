@@ -5,7 +5,7 @@ local CollectionService = game:GetService("CollectionService")
 local RunService = game:GetService("RunService")
 
 local itemPlace = game.ReplicatedStorage.RemoteEvents.ItemPlace
-local itemContainer = game.ReplicatedStorage.FurnitureModels
+local itemContainer = game.ReplicatedStorage.Buildings
 
 local function _findItem(itemName: string)
 	return itemContainer:FindFirstChild(itemName) or error(string.format("Item with name %s, doesn't exists!", itemName))
