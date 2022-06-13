@@ -20,7 +20,6 @@ do
 		-- если он отсутствует в ДатаСторе
 		local balance = CashAccounting:LoadCurrency(player) or CashAccounting:StartAccounting(player, START_CAPITAL)
 		
-		
 		do
 			local test = coroutine.wrap(function()
 				while wait(1) do
@@ -28,6 +27,7 @@ do
 					balance:AddMoney(math.random(-1000, 1000))
 				end
 			end)
+			test()
 		end
 	end)
 	

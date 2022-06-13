@@ -25,18 +25,12 @@ local ClientClasses = ReplicatedStorage.Client
 -- При помощи RemoteEvent CashChanged
 do 
 	local moneyScreenGui = PlayerGui:WaitForChild("Money")
-	local textBox = moneyScreenGui:WaitForChild("TextBox")
+	local textBox = moneyScreenGui:WaitForChild("Label")
 	
-	LocalPlayer.AttributeChanged:Connect(function(attributeName)
-		if not attributeName == "Money" then
-			return  
-		end
-		local moneyValue = LocalPlayer:GetAttribute(attributeName)
-		
-		textBox.Text = tostring(moneyValue)
-	end)
-	
-	textBox.Text = LocalPlayer:GetAttribute("Money") or "Loading..."
+	local Roact = require(game.ReplicatedStorage.Roact)
+	local moneyUI = require(game.ReplicatedStorage.Client.MoneyValueUI)
+
+	local tree = Roact.mount(moneyUI, LocalPlayer.PlayerGui, "Money")
 	
 end
 

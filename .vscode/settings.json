@@ -1,0 +1,9 @@
+{
+    "robloxLsp.completion.endAutocompletion": true,
+    "robloxLsp.hint.enable": true,
+    "robloxLsp.hint.paramName": true,
+    "robloxLsp.hint.returnType": true,
+    "robloxLsp.hint.setType": true,
+    "robloxLsp.typeChecking.mode": "Non Strict",
+    "robloxLsp.completion.callParenthesess": true
+}
