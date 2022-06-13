@@ -18,17 +18,11 @@ local RemoteEvents = ReplicatedStorage.RemoteEvents
 local SharedClasses = ReplicatedStorage.Shared
 local ClientClasses = ReplicatedStorage.Client
 
--- Оповещение сервера о том что клиент загрузился
--- Необходимо для синхронизации
-
 -- Отображение кол-ва денег на UI
--- При помощи RemoteEvent CashChanged
+-- При помощи Аттрибутов у игрока
 do 
-	local moneyScreenGui = PlayerGui:WaitForChild("Money")
-	local textBox = moneyScreenGui:WaitForChild("Label")
-	
-	local Roact = require(game.ReplicatedStorage.Roact)
-	local moneyUI = require(game.ReplicatedStorage.Client.MoneyValueUI)
+	local Roact = require(ClientClasses.Roact)
+	local moneyUI = require(ClientClasses.MoneyValueUI)
 
 	local tree = Roact.mount(moneyUI, LocalPlayer.PlayerGui, "Money")
 	

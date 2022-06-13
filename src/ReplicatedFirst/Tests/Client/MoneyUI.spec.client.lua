@@ -4,7 +4,7 @@ if not game:IsLoaded() then
 end
 local LocalPlayer = game.Players.LocalPlayer
 
-local Roact = require(game.ReplicatedStorage.Roact)
+local Roact = require(game.ReplicatedStorage.Client.Roact)
 local moneyUI = require(game.ReplicatedStorage.Client.MoneyValueUI)
 
 local tree = Roact.mount(moneyUI, LocalPlayer.PlayerGui, "Money")

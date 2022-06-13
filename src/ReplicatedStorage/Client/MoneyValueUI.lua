@@ -1,5 +1,5 @@
 
-local Roact = require(game.ReplicatedStorage.Roact)
+local Roact = require(game.ReplicatedStorage.Client.Roact)
 
 local LocalPlayer = game.Players.LocalPlayer
 
