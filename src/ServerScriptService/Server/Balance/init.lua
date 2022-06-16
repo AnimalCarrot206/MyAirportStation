@@ -20,7 +20,6 @@ function Balance.new(startCapital: number?)
 end
 -- Обычный метод уничтожения/осовобождения памяти
 function Balance:Destroy()
-	
 	self.Changed:Destroy()
 	self.Changed = nil
 	-- Просто удаляем все из таблички,
@@ -33,7 +32,7 @@ end
 function Balance:GetCapital(): number
 	return self._capital :: number
 end
--- Отдельный метод для проверки способности покупки
+-- Метод для проверки способности покупки
 function Balance:IsCanAfford(value: number): boolean
 	return self._capital >= value
 end
@@ -42,7 +41,7 @@ end
 -- отрицательные числа, как бы убавляя баланс,
 -- + Простая, шустрая реализация
 -- - Немножко странно, не интуитивно понятно
-function Balance:AddMoney(numberToAdd: number)
+function Balance:AddCapital(numberToAdd: number)
 	self._capital += numberToAdd
 	self.Changed:Fire(self._capital)
 end
