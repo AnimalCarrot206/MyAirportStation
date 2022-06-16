@@ -1,34 +1,19 @@
 --!strict
 local PathfindingService = game:GetService("PathfindingService")
 
-local NPC = {}
-NPC.__index = NPC
+local Npc = {}
+Npc.__index = Npc
 
 local npcFolder = game.ReplicatedStorage.NPC
 
+--[[
+	PRIVATE METHODS
+]]
 local function _getRandomNPC() : Model
 	local npcList = npcFolder:GetChildren()
 	local character = npcList[math.random(1, #npcList)]:Clone()
 	character.Parent = workspace
 	return character
-end
-
-local function _animate(character: any, animationName:string): AnimationTrack?
-	local animation = character:FindFirstChild(animationName):: Animation
-	local animator = character.Humanoid.Animator
-	if animator and animation then
-		return animator:LoadAnimation(animation)
-	end
-	return nil
-end
-
-function NPC.new(specialCharacter: Model?)
-	local newNPC = setmetatable({}, NPC)
-	
-	local character: Model = specialCharacter or _getRandomNPC()
-	newNPC.Character = character
-	
-	return newNPC
 end
 
 local function _walkToWaypoints(character: Model, tableWaypoints: {PathWaypoint})
@@ -58,32 +43,67 @@ local function _createPath(character: Model, destination: Vector3 | BasePart): P
 end
 
 local function _walk(character: Model, destination: Vector3 | BasePart)
-	
 	local path = _createPath(character, destination)
 	
-	if path.Status == Enum.PathStatus.Success then
-		local animationTrack = _animate(character, "Walking")
-		if animationTrack then
-			animationTrack.Looped = true
-			animationTrack:Play()
-		end
-		
-		_walkToWaypoints(character, path:GetWaypoints())
-		if animationTrack then
-			animationTrack:Stop()
-			animationTrack:Destroy()
-		end
-		return true
+	if path.Status == Enum.PathStatus.Success then	
+		_walkToWaypoints(character, path:GetWaypoints())	
 	end
-	return false
+	
+end
+--[[
+	CONSTRUCTOR
+]]
+function Npc.new(specialCharacter: Model?)
+	local newNpc = setmetatable({}, Npc)
+	
+	local character: Model = specialCharacter or _getRandomNPC()
+	-- Проверки на все подряд
+	local humanoid = character:FindFirstAncestorOfClass("Humanoid")
+	assert(humanoid, string.format("Humanoid must be provided in npc %s", character.Name))
+	local animator = humanoid:FindFirstAncestorOfClass("Animator")
+	assert(animator, string.format("Animator must be provided in npc %s, and parented to it's Humanoid", character.Name))
+	local walkingAnimation = character:FindFirstChild("Walking")
+	assert(walkingAnimation, string.format("Animation of walking must be provided in npc %s", character.Name))
+
+	local animationTrack = animator:LoadAnimation(walkingAnimation)
+
+	humanoid.StateChanged:Connect(function(old, new)
+		if new == Enum.HumanoidStateType.Running then
+			animationTrack:Play()
+			return
+		end
+		animationTrack:Stop()
+	end)
+
+	newNpc.Character = character
+	
+	return newNpc
+end
+--[[
+	PUBLIC METHODS
+]]
+function Npc:Animate(animationName:string, animation:Animation?): AnimationTrack?
+	assert(animationName or type(animationName) ~= "string", string.format("animationName string expected, got %s", type(animationName)))
+	if animation ~= nil then
+		assert(typeof(animation) == "Instance", string.format("animation Animation expected got %s", typeof(animation)))
+		assert(animation:IsA("Animation"), string.format("animation Animation expected got %s", animation.ClassName))
+	end
+
+	local animation = animation or self.Character:FindFirstChild(animationName):: Animation
+	local animator = self.Character.Humanoid.Animator:: Animator
+	-- Эта проверка не пройдет, в случае когда нам дан только один аргумент
+	-- animationName, и такой анимации у нпс не будет существовать
+	assert(animation, string.format("Animation with name %s doesn't exists", animationName))
+
+	return animator:LoadAnimation(animation)
 end
 
-function NPC:Move(destination: Vector3 | BasePart)
+function Npc:Move(destination: Vector3 | BasePart)
 	assert(typeof(destination) == "Vector3" or destination:IsA("BasePart"), "")
-	return _walk(self.Character, destination)
+	_walk(self.Character, destination)
 end
 
-function NPC:Destroy()
+function Npc:Destroy()
 	if self.Character then
 		self.Character:Destroy()
 	end
@@ -91,4 +111,4 @@ function NPC:Destroy()
 	self = nil
 end
 
-return NPC
+return Npc
