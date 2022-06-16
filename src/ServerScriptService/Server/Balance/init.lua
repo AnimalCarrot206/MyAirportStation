@@ -30,8 +30,8 @@ function Balance:Destroy()
 	self = nil
 end
 -- Это геттер для _capital поля
-function Balance:GetCapital()
-	return self._capital
+function Balance:GetCapital(): number
+	return self._capital :: number
 end
 -- Отдельный метод для проверки способности покупки
 function Balance:IsCanAfford(value: number): boolean
