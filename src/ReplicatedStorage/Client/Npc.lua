@@ -9,7 +9,7 @@ local npcFolder = game.ReplicatedStorage.NPC
 --[[
 	PRIVATE METHODS
 ]]
-local function _getRandomNPC() : Model
+local function _getRandomNpc() : Model
 	local npcList = npcFolder:GetChildren()
 	local character = npcList[math.random(1, #npcList)]:Clone()
 	character.Parent = workspace
@@ -56,7 +56,7 @@ end
 function Npc.new(specialCharacter: Model?)
 	local newNpc = setmetatable({}, Npc)
 	
-	local character: Model = specialCharacter or _getRandomNPC()
+	local character: Model = specialCharacter or _getRandomNpc()
 	-- Проверки на все подряд
 	local humanoid = character:FindFirstAncestorOfClass("Humanoid")
 	assert(humanoid, string.format("Humanoid must be provided in npc %s", character.Name))
