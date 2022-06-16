@@ -51,15 +51,8 @@ function MoneyDisplay:render()
 end
 
 function MoneyDisplay:didMount()
-    self.running = true
-
-    local connection
-    connection = LocalPlayer.AttributeChanged:Connect(function(attribute)
+    self.connection = LocalPlayer.AttributeChanged:Connect(function(attribute)
         if attribute ~= "Money" then
-            return
-        end
-        if self.running == false then
-            connection:Disconnect()
             return
         end
         self:setState({
@@ -69,7 +62,9 @@ function MoneyDisplay:didMount()
 end
 
 function MoneyDisplay:willUnmount()
-    self.running = false
+    if self.connection then
+        self.connection:Disconnect()
+    end
 end
 
 local moneyUI = Roact.createElement(MoneyDisplay)
