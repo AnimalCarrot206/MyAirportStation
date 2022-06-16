@@ -39,7 +39,7 @@ end
 function CashAccouting:GetPlayerBalance(player: Player): any
 	return playersBalances[player.Name]
 end
--- Метод для DataStore
+-- Метод для DataStore, загружает баланс
 function CashAccouting:LoadCurrency(player: Player)
 	local success, currentMoneyValue = pcall(function()
 		return MoneyDataStore:GetAsync(player.UserId)
@@ -49,7 +49,7 @@ function CashAccouting:LoadCurrency(player: Player)
 		return CashAccouting:StartAccounting(player, currentMoneyValue)
 	end
 end
--- Метод для DataStore
+-- Метод для DataStore, сохраняет баланс
 function CashAccouting:SaveCurrency(player: Player)
 	local balance = CashAccouting:GetPlayerBalance(player)
 	assert(balance, string.format("Player: %s doesn't have balance!", player.Name))

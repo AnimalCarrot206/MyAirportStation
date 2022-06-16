@@ -6,10 +6,10 @@ local CashAccounting = require(script.Parent)
 local function commonTests(player: Player, balance: any?)
 	local createdBalance = balance or CashAccounting:StartAccounting(player)
 	----------------------------------------
-	createdBalance:AddMoney(-createdBalance:GetCapital())
+	createdBalance:AddCapital(-createdBalance:GetCapital())
 	assert(createdBalance:GetCapital() == 0)
 	----------------------------------------
-	createdBalance:AddMoney(100)
+	createdBalance:AddCapital(100)
 	----------------------------------------
 	assert(createdBalance:GetCapital() == 100)
 	assert(createdBalance:IsCanAfford(50))
