@@ -11,29 +11,41 @@ local isStarted: boolean = false
 
 local currentModel: Model?
 
+local cellsContainer: Instance
 local cells: {[number]: BasePart}
 
 local _connectMouse
 local _disconnectMouse
 do
+    local camera = workspace.CurrentCamera
     local mouse = LocalPlayer:GetMouse()
     local mouseMoveConnection: RBXScriptConnection
     local mouseButton1UpConnection: RBXScriptConnection
 
-    _connectMouse = function()
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterType = Enum.RaycastFilterType.Whitelist
+    
+
+	_connectMouse = function()
+		raycastParams.FilterDescendantsInstances = {cellsContainer}
+		
         mouseMoveConnection = mouse.Move:Connect(function()
-            if not (mouse.Target and CollectionService:HasTag(mouse.Target, "Cell")) then
+            local raycastResult = workspace:Raycast(mouse.UnitRay.Origin, mouse.UnitRay.Direction.Unit * 500 ,raycastParams)
+
+            if not raycastResult then
                 return
             end
-
-            Canvas:Move(currentModel, mouse.Hit.Position)
+            
+            Canvas:Move(currentModel, raycastResult.Position)
         end)
 
         mouseButton1UpConnection = mouse.Button1Up:Connect(function()
-            if not (mouse.Target and CollectionService:HasTag(mouse.Target, "Cell")) then
+            local raycastResult = workspace:Raycast(mouse.UnitRay.Origin, mouse.UnitRay.Direction.Unit * 500 ,raycastParams)
+
+            if not raycastResult then
                 return
             end
-            Canvas:Place(currentModel, mouse.Hit.Position)
+            Canvas:Place(currentModel, raycastResult.Position)
         end)
     end
 
@@ -58,6 +70,8 @@ function BuildMode:Start(cellsDirectory: Instance)
         return
     end
     assert(#cellsDirectory:GetChildren() > 1)
+
+    cellsContainer = cellsDirectory
 
     local children = cellsDirectory:GetChildren() :: {[number]: BasePart}
     Canvas:Assign(children)
@@ -90,7 +104,6 @@ function BuildMode:SetItemModel(itemModel: Model?)
         return
     end
     currentModel = itemModel
-    currentModel.Parent = workspace.Ignore
     _connectMouse()
 end
 
