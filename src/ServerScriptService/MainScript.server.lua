@@ -24,7 +24,7 @@ do
 			local test = coroutine.wrap(function()
 				while wait(1) do
 					print("Changing...")
-					balance:AddMoney(math.random(-1000, 1000))
+					balance:AddCapital(math.random(1, 1000))
 				end
 			end)
 			test()
@@ -70,7 +70,7 @@ do
 		-- Если кол-во денег больше или равно стоимости
 		-- Тогда покупаем
 		if balance:IsCanAfford(itemCost) then
-			balance:AddMoney(-itemCost)
+			balance:AddCapital(-itemCost)
 			return true
 		end
 		return false
