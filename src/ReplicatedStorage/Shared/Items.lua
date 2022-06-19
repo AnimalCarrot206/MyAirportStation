@@ -11,7 +11,7 @@ local function _findItem(itemName: string)
 	return itemContainer:FindFirstChild(itemName) or error(string.format("Item with name %s, doesn't exists!", itemName))
 end
 
-function Items:GetItem(itemName: string)
+function Items:GetItem(itemName: string): Model
 	local foundItem = _findItem(itemName)
 	
 	if not CollectionService:HasTag(foundItem, "Item") then
@@ -57,12 +57,12 @@ function Items:IsBuyable(itemName: string): boolean
 	return CollectionService:HasTag(foundItem, "Buyable")
 end
 
-function Items:GetCost(itemName: string)
+function Items:GetCost(itemName: string): number
 	local foundItem = self:GetItem(itemName)
 	return foundItem:GetAttribute("Cost") :: number
 end
 
-function Items:GetBuyableItemPrice(itemName: string)
+function Items:GetBuyableItemPrice(itemName: string): number
 	local foundItem = self:GetItem(itemName)
 	return foundItem:GetAttribute("Price") :: number
 end

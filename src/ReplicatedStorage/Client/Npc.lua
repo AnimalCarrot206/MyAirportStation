@@ -82,7 +82,7 @@ end
 --[[
 	PUBLIC METHODS
 ]]
-function Npc:Animate(animationName:string, animation:Animation?): AnimationTrack?
+function Npc:Animate(animationName:string, animation:Animation?): AnimationTrack
 	assert(animationName or type(animationName) ~= "string", string.format("animationName string expected, got %s", type(animationName)))
 	if animation ~= nil then
 		assert(typeof(animation) == "Instance", string.format("animation Animation expected got %s", typeof(animation)))
