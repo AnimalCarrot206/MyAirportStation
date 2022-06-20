@@ -73,10 +73,6 @@ function Items:GetActingFunction(itemModel: Model): (npc: any) -> ()
 	return require(moduleScript)
 end
 
-function Items:Move(itemModel: Model, cframeToMove: CFrame)
-	itemModel:SetPrimaryPartCFrame(cframeToMove)
-end
-
 function Items:Place(itemName: string, cframeToPlace: CFrame, player: Player?)
 	if RunService:IsClient() then
 		itemPlace:FireServer(itemName, cframeToPlace)

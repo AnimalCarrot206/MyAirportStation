@@ -40,6 +40,10 @@ function Canvas:GetCellWithPosition(position: Vector3): BasePart
     return nearestCell
 end
 
+function Canvas:GetRightPosition(cell: BasePart)
+    return cell.Position + Vector3.new(0, cell.Size.Y / 2, 0)
+end
+
 function Canvas:Move(itemModel: Model, positionToMove: CFrame | Vector3)
     assert(itemModel)
     assert(positionToMove)
@@ -49,7 +53,9 @@ function Canvas:Move(itemModel: Model, positionToMove: CFrame | Vector3)
     end
 
     local nearestCell = self:GetCellWithPosition(positionToMove)
-    Items:Move(itemModel, CFrame.new(nearestCell.Position))
+    local modelRotation = itemModel.PrimaryPart.Rotation
+
+    itemModel:SetPrimaryPartCFrame(CFrame.Angles(0, math.rad(modelRotation.Y), 0) + self:GetRightPosition(nearestCell))
 
     if nearestCell:GetAttribute("Occupied") == true then
         selectionBox.Color3 = Color3.fromRGB(255, 0, 0)
@@ -64,12 +70,13 @@ end
 function Canvas:Place(itemModel: Model, positionToPlace: Vector3)
     local nearestCell = self:GetCellWithPosition(positionToPlace)
 
-    self:Move(itemModel, positionToPlace)
-
     if nearestCell:GetAttribute("Occupied") == true then
         return
     end
-    Items:Place(itemModel.Name, CFrame.new(nearestCell.Position))
+    
+    local modelRotation = itemModel.PrimaryPart.Rotation
+
+    Items:Place(itemModel.Name, CFrame.Angles(0, math.rad(modelRotation.Y), 0) + self:GetRightPosition(nearestCell))
 
     nearestCell:SetAttribute("Occupied", true)
 end

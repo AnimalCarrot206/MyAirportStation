@@ -1,4 +1,5 @@
 local CollectionService = game:GetService("CollectionService")
+local ContextActionService = game:GetService("ContextActionService")
 local Players = game:GetService("Players")
 
 local Canvas = require(game.ReplicatedStorage.Client.Canvas)
@@ -59,6 +60,33 @@ do
     end
 end
 
+local _connectRotation
+local _disconnectRotation
+do
+    local actionName = "Rotate"
+
+    local function rotateItem(actionName, inputState, inputObject)
+        if inputState ~= Enum.UserInputState.Begin then
+            return
+        end
+
+        if actionName ~= "Rotate" then
+            return
+        end
+
+        local cframe = currentModel:GetPrimaryPartCFrame()
+        currentModel:SetPrimaryPartCFrame(cframe * CFrame.Angles(math.rad(0), math.rad(90), math.rad(0)))
+    end
+
+    _connectRotation = function()
+        ContextActionService:BindAction(actionName, rotateItem, false, Enum.KeyCode.R)
+    end
+
+    _disconnectRotation = function()
+        ContextActionService:UnbindAction(actionName)
+    end
+end
+
 local function _tagCells()
     for index, part in ipairs(cells) do
         CollectionService:AddTag(part, "Cell")
@@ -88,6 +116,7 @@ function BuildMode:Stop()
     end
 
     _disconnectMouse()
+    _connectRotation()
     Canvas:Unassign()
 
     isStarted = false
@@ -105,6 +134,7 @@ function BuildMode:SetItemModel(itemModel: Model?)
     end
     currentModel = itemModel
     _connectMouse()
+    _connectRotation()
 end
 
 return BuildMode
