@@ -1,84 +1,157 @@
+local CollectionService = game:GetService("CollectionService")
 
 local Items = require(game.ReplicatedStorage.Shared.Items)
 
 local Canvas = {}
 
-local Cells: {[number]: BasePart} = {}
+local CellsArray: {[number]: BasePart} = {}
 
-local selectionBox = Instance.new("SelectionBox")
-selectionBox.LineThickness = 0.075
-selectionBox.SurfaceTransparency = 0.75
-selectionBox.Transparency = 0.15
-selectionBox.Parent = workspace
+local CurrentCell: BasePart
 
-local function _findNearestCell(position: Vector3): BasePart
-    local magnitude = math.huge
-    local currentPart
+local _isCanPlace
+    
+do
+    local function isCanPlaceConstruction(itemModel: Model)
+        local orientation = itemModel:GetAttribute("Orientation")
 
-    for index, part in ipairs(Cells) do
-        local newMagnitude = (part.Position - position).Magnitude
-
-        if newMagnitude < magnitude then
-            magnitude = newMagnitude
-            currentPart = part
+        if not orientation then
+            print(string.format("Item %s is undefined with orientation attribute", itemModel.Name))
+            return false
         end
+
+        local objectValueBasedOnOrientation = CurrentCell:FindFirstChild(orientation) :: ObjectValue
+
+        return objectValueBasedOnOrientation.Value == nil
     end
 
-    return currentPart
+    _isCanPlace = function(itemModel: Model)
+        if CollectionService:HasTag(itemModel, "Construction") then
+            return isCanPlaceConstruction(itemModel)
+        end
+
+        local center = CurrentCell:FindFirstChild("Center") :: ObjectValue
+        
+        return center.Value == nil
+    end
+end
+
+local _highlightingCellHandler
+
+do
+    local selectionBox = Instance.new("SelectionBox")
+    selectionBox.LineThickness = 0.075
+    selectionBox.SurfaceTransparency = 0.75
+    selectionBox.Transparency = 0.15
+    selectionBox.Parent = workspace
+
+    local WRONG_PLACE_COLOR = Color3.fromRGB(255, 28, 28)
+    local RIGHT_PLACE_COLOR = Color3.fromRGB(67, 255, 64)
+
+    _highlightingCellHandler = function(itemModel: Model)
+        local isCanPlace = _isCanPlace(itemModel)
+
+        if isCanPlace == true then
+            selectionBox.SurfaceColor3 = RIGHT_PLACE_COLOR
+            selectionBox.Color3 = RIGHT_PLACE_COLOR
+            
+        end
+
+        if isCanPlace == false then
+            selectionBox.SurfaceColor3 = WRONG_PLACE_COLOR
+            selectionBox.Color3 = WRONG_PLACE_COLOR
+            
+        end
+
+        selectionBox.Adornee = CurrentCell
+    end
 end
 
 function Canvas:Assign(cells: {[number]: BasePart})
-   Cells = cells
+   CellsArray = cells
 end
 
 function Canvas:Unassign()
-    Cells = nil
+    CellsArray = nil
+    CurrentCell = nil
 end
 
-function Canvas:GetCellWithPosition(position: Vector3): BasePart
-    local nearestCell = _findNearestCell(position)
-    return nearestCell
-end
 
-function Canvas:GetRightPosition(cell: BasePart)
-    return cell.Position + Vector3.new(0, cell.Size.Y / 2, 0)
-end
-
-function Canvas:Move(itemModel: Model, positionToMove: CFrame | Vector3)
+function Canvas:Move(itemModel: Model, cell: BasePart)
     assert(itemModel)
-    assert(positionToMove)
+    assert(cell)
+    assert(table.find(CellsArray, cell))
 
-    if typeof(positionToMove) == "CFrame" then
-        positionToMove = positionToMove.Position
+    local itemCFrame = itemModel:GetPrimaryPartCFrame()
+    local cellSurfacePosition = cell.Position + Vector3.new(0, cell.Size.Y / 2, 0)
+    itemModel:SetPrimaryPartCFrame(itemCFrame.Rotation + cellSurfacePosition)
+
+    CurrentCell = cell
+
+    _highlightingCellHandler(itemModel)
+end
+
+function Canvas:Rotate(itemModel: Model,cell: BasePart, degrees: number?)
+    assert(itemModel)
+    degrees = degrees or 90
+
+    local cframe = itemModel:GetPrimaryPartCFrame()
+    itemModel:SetPrimaryPartCFrame(cframe * CFrame.Angles(math.rad(0), math.rad(degrees), math.rad(0)))
+    
+
+    local orientation = itemModel.PrimaryPart.Orientation.Y
+    print(orientation)
+
+    if not CollectionService:HasTag(itemModel, "Construction") then
+        return
     end
 
-    local nearestCell = self:GetCellWithPosition(positionToMove)
-    local modelRotation = itemModel.PrimaryPart.Rotation
-
-    itemModel:SetPrimaryPartCFrame(CFrame.Angles(0, math.rad(modelRotation.Y), 0) + self:GetRightPosition(nearestCell))
-
-    if nearestCell:GetAttribute("Occupied") == true then
-        selectionBox.Color3 = Color3.fromRGB(255, 0, 0)
-        selectionBox.SurfaceColor3 = Color3.fromRGB(255, 28, 28)
-    else
-        selectionBox.Color3 = Color3.fromRGB(0, 255, 0)
-        selectionBox.SurfaceColor3 = Color3.fromRGB(67, 255, 64)
+    local result
+    if orientation == 0 then
+        result = "Back"
+    elseif orientation == 90 then
+        result = "Right"
+    elseif orientation == -180 then
+        result = "Forward"
+    elseif orientation == -90 then
+        result = "Left"
     end
-    selectionBox.Adornee = nearestCell
+
+    itemModel:SetAttribute("Orientation", result)
+    _highlightingCellHandler(itemModel)
 end
 
 function Canvas:Place(itemModel: Model, positionToPlace: Vector3)
-    local nearestCell = self:GetCellWithPosition(positionToPlace)
-
-    if nearestCell:GetAttribute("Occupied") == true then
+    if not _isCanPlace(itemModel) then
         return
     end
-    
-    local modelRotation = itemModel.PrimaryPart.Rotation
 
-    Items:Place(itemModel.Name, CFrame.Angles(0, math.rad(modelRotation.Y), 0) + self:GetRightPosition(nearestCell))
 
-    nearestCell:SetAttribute("Occupied", true)
+    if CollectionService:HasTag(itemModel, "Construction") then
+        local orientation = itemModel:GetAttribute("Orientation")
+
+        if not orientation then
+            warn()
+            return
+        end
+
+        local objectValueBasedOnOrientation = CurrentCell:FindFirstChild(orientation) :: ObjectValue
+        
+        if objectValueBasedOnOrientation.Value ~= nil then
+            return
+        end
+
+        objectValueBasedOnOrientation.Value = itemModel
+    else
+        local centerObjectValue = CurrentCell:FindFirstChild("Center") :: ObjectValue
+
+        if centerObjectValue.Value ~= nil then
+            return
+        end
+
+        centerObjectValue.Value = itemModel
+    end
+
+    Items:Place(itemModel.Name, itemModel:GetPrimaryPartCFrame())
 end
 
 return Canvas
