@@ -19,20 +19,11 @@ do
 		-- Загружаем баланс или создаем его,
 		-- если он отсутствует в ДатаСторе
 		local balance = CashAccounting:LoadCurrency(player) or CashAccounting:StartAccounting(player, START_CAPITAL)
-		
-		do
-			local test = coroutine.wrap(function()
-				while wait(1) do
-					print("Changing...")
-					balance:AddCapital(math.random(1, 1000))
-				end
-			end)
-			test()
-		end
 	end)
 	
 	Players.PlayerRemoving:Connect(function(player: Player)
 		CashAccounting:SaveCurrency(player)
+		CashAccounting:StopAccouting(player)
 	end)
 end
 -- ItemFolders
