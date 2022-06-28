@@ -5,6 +5,6 @@ end
 local BuildMode = require(game.ReplicatedStorage.Client.BuildMode)
 
 BuildMode:Start(workspace.cells)
-local itemModel = game.ReplicatedStorage.Buildings.Construction["Windows Wall"]:Clone()
+local itemModel = game.ReplicatedStorage.Buildings.Fountains["Alien Fountain"]:Clone()
 itemModel.Parent = workspace
 BuildMode:SetItemModel(itemModel)

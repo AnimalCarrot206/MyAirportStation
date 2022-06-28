@@ -37,7 +37,11 @@ do
                 return
             end
             
-            Canvas:Move(currentModel, raycastResult.Position)
+            if not CollectionService:HasTag(raycastResult.Instance, "Cell") then
+                return
+            end
+
+            Canvas:Move(currentModel, raycastResult.Instance)
         end)
 
         mouseButton1UpConnection = mouse.Button1Up:Connect(function()
@@ -62,6 +66,7 @@ end
 
 local _connectRotation
 local _disconnectRotation
+
 do
     local actionName = "Rotate"
 
@@ -74,8 +79,7 @@ do
             return
         end
 
-        local cframe = currentModel:GetPrimaryPartCFrame()
-        currentModel:SetPrimaryPartCFrame(cframe * CFrame.Angles(math.rad(0), math.rad(90), math.rad(0)))
+        Canvas:Rotate(currentModel)
     end
 
     _connectRotation = function()
@@ -90,6 +94,23 @@ end
 local function _tagCells()
     for index, part in ipairs(cells) do
         CollectionService:AddTag(part, "Cell")
+        local left = Instance.new("ObjectValue")
+        local right = Instance.new("ObjectValue")
+        local forward = Instance.new("ObjectValue")
+        local back = Instance.new("ObjectValue")
+        local center = Instance.new("ObjectValue")
+
+        left.Name = "Left"
+        right.Name = "Right"
+        forward.Name = "Forward"
+        back.Name = "Back"
+        center.Name = "Center"
+
+        left.Parent = part
+        right.Parent = part
+        forward.Parent = part
+        back.Parent = part
+        center.Parent = part
     end
 end
 
@@ -116,7 +137,7 @@ function BuildMode:Stop()
     end
 
     _disconnectMouse()
-    _connectRotation()
+    _disconnectRotation()
     Canvas:Unassign()
 
     isStarted = false
@@ -129,6 +150,7 @@ end
 function BuildMode:SetItemModel(itemModel: Model?)
     if not itemModel then
         _disconnectMouse()
+        _disconnectRotation()
         currentModel = nil
         return
     end
