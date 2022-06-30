@@ -49,6 +49,7 @@ do
 	local Items = require(SharedClasses.Items)
 	
 	local placeItem = RemoteEvents.ItemPlace
+	local removeItem = RemoteEvents.ItemRemove
 	
 	-- Функция покупающая предмет
 	-- !При этом сразу проверяющая хватает ли денег игроку!
@@ -67,9 +68,9 @@ do
 		return false
 	end
 	-- Срабатывает когда игрок нажимает левую кнопку с экипированный предметом
-	placeItem.OnServerEvent:Connect(function(player: Player, name: string, cframeToPlace: CFrame)
+	placeItem.OnServerEvent:Connect(function(player: Player, itemName: string, cframeToPlace: CFrame)
 		local success, errorMessage = pcall(function()
-			return Items:GetItem(name)
+			return Items:GetItem(itemName)
 		end)
 		-- Если внутри pcall будет ошибка, то model станет 
 		-- сообщением об ошибке, его мы и посылаем на клиент
@@ -80,7 +81,7 @@ do
 		
 		-- !ВАЖНО!
 		-- У ЛЮБОЙ МОДЕЛИ-ПРЕДМЕТА ДОЛЖЕН БЫТЬ АТТРИБУТ "Cost"
-		local cost = Items:GetCost(name)
+		local cost = Items:GetCost(itemName)
 		-- Пытаемся купить предмет, если не удалось
 		-- отправляем сообщение на сервер
 		local success = buyItem(player, cost)
@@ -89,6 +90,25 @@ do
 			return
 		end
 		
-		Items:Place(name, cframeToPlace, player)
+		Items:Place(itemName, cframeToPlace, player)
+	end)
+
+	removeItem.OnClientEvent:Connect(function(player: Player, itemName: string, itemCFrame: CFrame)
+		local success, errorMessage = pcall(function()
+			Items:Remove(itemName, itemCFrame, player)
+		end)
+		
+		if not success then
+			return
+		end
+
+		local cost = Items:GetCost(itemName)
+
+		local balance = CashAccounting:GetPlayerBalance(player)
+		if not balance then
+			return
+		end
+
+		balance:AddCapital(cost)
 	end)
 end

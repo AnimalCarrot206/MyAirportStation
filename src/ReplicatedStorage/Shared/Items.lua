@@ -5,6 +5,7 @@ local CollectionService = game:GetService("CollectionService")
 local RunService = game:GetService("RunService")
 
 local itemPlace = game.ReplicatedStorage.RemoteEvents.ItemPlace
+local itemRemove = game.ReplicatedStorage.RemoteEvents.ItemRemove
 local itemContainer = game.ReplicatedStorage.Buildings
 
 local function _findItem(itemName: string)
@@ -73,6 +74,8 @@ function Items:GetActingFunction(itemModel: Model): (npc: any) -> ()
 	return require(moduleScript)
 end
 
+
+
 function Items:Place(itemName: string, cframeToPlace: CFrame, player: Player?)
 	if RunService:IsClient() then
 		itemPlace:FireServer(itemName, cframeToPlace)
@@ -105,6 +108,27 @@ function Items:Place(itemName: string, cframeToPlace: CFrame, player: Player?)
 
 		itemModel.Parent = playerItemContainer.Item
 		return
+	end
+end
+
+function Items:Remove(itemName: string, itemCFrame: CFrame, player: Player?)
+	if RunService:IsClient() then
+		itemRemove:FireServer(itemName, itemCFrame)
+	end
+
+	if RunService:IsServer() then
+		assert(player, "Player must be provided for server Place function")
+
+		local playerItemContainer = workspace.ItemContainer:FindFirstChild(player.Name)
+		assert(playerItemContainer, string.format("%s doesn't have ItemContainer folder", player.Name))
+
+		for index, item in ipairs(playerItemContainer:GetChildren()) do
+			if item:GetPrimaryPartCFrame() == itemCFrame then
+				item:Destroy()
+				return
+			end
+		end
+		error(string.format("Player %s didn't place item %s", player.Name, itemName))
 	end
 end
 

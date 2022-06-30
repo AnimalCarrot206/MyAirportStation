@@ -93,6 +93,10 @@ end
 
 local function _tagCells()
     for index, part in ipairs(cells) do
+        if ContextActionService:HasTag("Cell", part) then
+            continue
+        end
+        
         CollectionService:AddTag(part, "Cell")
         local left = Instance.new("ObjectValue")
         local right = Instance.new("ObjectValue")

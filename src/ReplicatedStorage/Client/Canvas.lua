@@ -66,6 +66,24 @@ do
     end
 end
 
+local _findCellWithItem
+
+do
+    _findCellWithItem = function(itemModel: Model)
+        for index, cell in ipairs(CellsArray) do
+            for _, child in ipairs(cell:GetChildren()) do
+               if not child:IsA("ObjectValue") then
+                continue
+               end
+
+               if child.Value == itemModel then
+                return cell, child :: ObjectValue
+               end
+            end
+        end
+    end
+end
+
 function Canvas:Assign(cells: {[number]: BasePart})
    CellsArray = cells
 end
@@ -152,6 +170,15 @@ function Canvas:Place(itemModel: Model, positionToPlace: Vector3)
     end
 
     Items:Place(itemModel.Name, itemModel:GetPrimaryPartCFrame())
+end
+
+function Canvas:Remove(itemModel: Model)
+    local foundCell, foundObjectValue = _findCellWithItem(itemModel)
+    
+    Items:Remove(itemModel.Name, itemModel:GetPrimaryPartCFrame())
+
+    foundObjectValue.Value:Destroy()
+    foundObjectValue = nil
 end
 
 return Canvas
