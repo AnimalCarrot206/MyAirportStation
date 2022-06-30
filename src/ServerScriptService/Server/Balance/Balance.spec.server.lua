@@ -4,7 +4,7 @@ local Balance = require(script.Parent)
 local createdBalance = Balance.new()
 assert(createdBalance:GetCapital() == 0)
 ----------------------------------------
-createdBalance:AddMoney(100)
+createdBalance:AddCapital(100)
 ----------------------------------------
 assert(createdBalance:GetCapital() == 100)
 assert(createdBalance:IsCanAfford(50))
